@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 
 export default function Page() {
   const [input, setInput] = useState('');
+  const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
+  const [oscillator, setOscillator] = useState<OscillatorNode | null>(null);
 
   // ドレミファソラシドの周波数
   const noteFrequencies: { [key: string]: number } = {
@@ -18,7 +20,8 @@ export default function Page() {
   };
 
   useEffect(() => {
-    const audioContext = new window.AudioContext();
+    const context = new window.AudioContext();
+    setAudioContext(context);
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.code.startsWith('Numpad')) {
@@ -27,31 +30,46 @@ export default function Page() {
 
         // 該当する音を再生
         if (noteFrequencies[number]) {
-          playNote(audioContext, noteFrequencies[number]);
+          startNote(context, noteFrequencies[number]);
         }
       }
     };
 
-    const playNote = (audioContext: AudioContext, frequency: number) => {
-      const oscillator = audioContext.createOscillator();
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.code.startsWith('Numpad') && oscillator) {
+        stopNote();
+      }
+    };
+
+    const startNote = (audioContext: AudioContext, frequency: number) => {
+      const osc = audioContext.createOscillator();
       const gainNode = audioContext.createGain();
 
-      oscillator.type = 'sine'; // 波形のタイプを指定（ここでは正弦波）
-      oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime); // 周波数を設定
-      oscillator.connect(gainNode);
+      osc.type = 'sine'; // 波形のタイプを指定（ここでは正弦波）
+      osc.frequency.setValueAtTime(frequency, audioContext.currentTime); // 周波数を設定
+      osc.connect(gainNode);
       gainNode.connect(audioContext.destination);
 
-      oscillator.start();
-      oscillator.stop(audioContext.currentTime + 0.5); // 0.5秒後に音を止める
+      osc.start();
+      setOscillator(osc);
+    };
+
+    const stopNote = () => {
+      if (oscillator) {
+        oscillator.stop();
+        setOscillator(null);
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
-      audioContext.close();
+      window.removeEventListener('keyup', handleKeyUp);
+      if (audioContext) audioContext.close();
     };
-  }, []);
+  }, [oscillator]);
 
   return (
     <div>
