@@ -1,5 +1,4 @@
 'use client'; // クライアントサイドで動作するファイルであることを指定
-'use client'; // クライアントサイドで動作するファイルであることを指定
 
 import { useState, useEffect } from 'react';
 
