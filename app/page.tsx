@@ -1,4 +1,5 @@
 'use client'; // クライアントサイドで動作するファイルであることを指定
+'use client'; // クライアントサイドで動作するファイルであることを指定
 
 import { useState, useEffect } from 'react';
 
@@ -73,6 +74,8 @@ export default function Page() {
 
   return (
     <div>
+      <h1>テンキーでドレミファソラシドを再生</h1>
+      <p>テンキーで数字を押して音を確認してください：</p>
       <h1>テンキーでドレミファソラシドを再生</h1>
       <p>テンキーで数字を押して音を確認してください：</p>
       <div id="display">{input}</div>
