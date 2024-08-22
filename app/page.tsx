@@ -63,22 +63,35 @@ export default function Page() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    const particles: { x: number; y: number; vx: number; vy: number; size: number; color: string }[] = [];
+    const numParticles = 100;
+
+    for (let i = 0; i < numParticles; i++) {
+      particles.push({
+        x: canvas.width / 2,
+        y: canvas.height / 2,
+        vx: (Math.random() - 0.5) * 2 * (frequency / 100),
+        vy: (Math.random() - 0.5) * 2 * (frequency / 100),
+        size: Math.random() * 3 + 1,
+        color: `hsl(${Math.random() * 360}, 100%, 50%)`,
+      });
+    }
+
     const draw = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // スパークするエフェクト
-      const numSparks = 50;
-      for (let i = 0; i < numSparks; i++) {
-        const angle = Math.random() * 2 * Math.PI;
-        const distance = Math.random() * (frequency / 4);
-        const x = canvas.width / 2 + distance * Math.cos(angle);
-        const y = canvas.height / 2 + distance * Math.sin(angle);
+      particles.forEach((p) => {
+        p.x += p.vx;
+        p.y += p.vy;
+
+        if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+        if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
 
         ctx.beginPath();
-        ctx.arc(x, y, 2, 0, 2 * Math.PI);
-        ctx.fillStyle = `hsl(${Math.random() * 360}, 100%, 50%)`;
+        ctx.arc(p.x, p.y, p.size, 0, 2 * Math.PI);
+        ctx.fillStyle = p.color;
         ctx.fill();
-      }
+      });
 
       requestIdRef.current = requestAnimationFrame(draw);
     };
@@ -135,20 +148,22 @@ export default function Page() {
   };
 
   useEffect(() => {
+    const resizeCanvas = () => {
+      const canvas = canvasRef.current;
+      if (canvas) {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+      }
+    };
+
+    window.addEventListener('resize', resizeCanvas);
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
 
-    // 初期化時にキャンバスに描画テスト
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = 'white';
-        ctx.fillRect(10, 10, 50, 50); // テスト用の四角形を描画
-      }
-    }
+    resizeCanvas();
 
     return () => {
+      window.removeEventListener('resize', resizeCanvas);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
       stopVisualization();
@@ -157,13 +172,15 @@ export default function Page() {
 
   return (
     <div>
-      <h1>テンキーで和音を再生</h1>
-      <p>現在のスケール: {currentScale.name}</p>
-      <p>現在押されているキー：</p>
-      <div id="display">
-        {Array.from(activeKeys).join(', ')}
+      <canvas ref={canvasRef} style={{ position: 'fixed', top: 0, left: 0, zIndex: -1 }} />
+      <div style={{ position: 'relative', zIndex: 1, color: 'white', padding: '10px' }}>
+        <h1>テンキーで和音を再生</h1>
+        <p>現在のスケール: {currentScale.name}</p>
+        <p>現在押されているキー：</p>
+        <div id="display">
+          {Array.from(activeKeys).join(', ')}
+        </div>
       </div>
-      <canvas ref={canvasRef} width={800} height={600} style={{ background: 'black', marginTop: '20px' }} />
     </div>
   );
 }
