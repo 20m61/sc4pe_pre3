@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 export default function Page() {
   const [activeKeys, setActiveKeys] = useState<Set<string>>(new Set());
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
-  const [oscillators, setOscillators] = useState<{ [key: string]: { osc: OscillatorNode, gain: GainNode } | null }>({});
+  const [oscillators, setOscillators] = useState<{ [key: string]: OscillatorNode | null }>({});
   const [currentScaleIndex, setCurrentScaleIndex] = useState(0);
 
   const scales = [
@@ -28,9 +28,8 @@ export default function Page() {
     setAudioContext(context);
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      const number = event.key;
       if (event.code.startsWith('Numpad')) {
-        const number = event.key;
-
         if (number === '+') {
           setCurrentScaleIndex((prevIndex) => (prevIndex + 1) % scales.length);
         } else if (number === '-') {
@@ -38,12 +37,10 @@ export default function Page() {
         } else if (!isNaN(Number(number))) {
           setActiveKeys((prevKeys) => {
             const newKeys = new Set(prevKeys);
-            newKeys.add(number);
-
-            if (currentScale.notes[parseInt(number) - 1] && !oscillators[number]) {
+            if (!newKeys.has(number)) {
+              newKeys.add(number);
               startNote(context, number, currentScale.notes[parseInt(number) - 1]);
             }
-
             return newKeys;
           });
         }
@@ -51,14 +48,12 @@ export default function Page() {
     };
 
     const handleKeyUp = (event: KeyboardEvent) => {
+      const number = event.key;
       if (event.code.startsWith('Numpad')) {
-        const number = event.key;
         setActiveKeys((prevKeys) => {
           const newKeys = new Set(prevKeys);
           newKeys.delete(number);
-
           stopNote(number);
-
           return newKeys;
         });
       }
@@ -78,21 +73,21 @@ export default function Page() {
 
       setOscillators((prevOscillators) => ({
         ...prevOscillators,
-        [key]: { osc, gain: gainNode },
+        [key]: osc,
       }));
     };
 
     const stopNote = (key: string) => {
-      const node = oscillators[key];
-      if (node) {
-        const { osc, gain } = node;
-        gain.gain.exponentialRampToValueAtTime(0.001, audioContext!.currentTime + 0.03);
-        osc.stop(audioContext!.currentTime + 0.03);
-        osc.disconnect();
-        setOscillators((prevOscillators) => ({
-          ...prevOscillators,
-          [key]: null,
-                  }));
+      if (oscillators[key]) {
+        const osc = oscillators[key];
+        if (osc) {
+          osc.stop();
+          osc.disconnect();
+          setOscillators((prevOscillators) => ({
+            ...prevOscillators,
+            [key]: null,
+          }));
+        }
       }
     };
 
