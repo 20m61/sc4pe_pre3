@@ -1,23 +1,27 @@
-'use client'; // クライアントサイドで動作するファイルであることを指定
+'use client';
 
 import { useState, useEffect } from 'react';
 
 export default function Page() {
-  const [input, setInput] = useState('');
+  const [activeKeys, setActiveKeys] = useState<Set<string>>(new Set());
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
-  const [oscillator, setOscillator] = useState<OscillatorNode | null>(null);
+  const [oscillators, setOscillators] = useState<{ [key: string]: { osc: OscillatorNode, gain: GainNode } | null }>({});
+  const [currentScaleIndex, setCurrentScaleIndex] = useState(0);
 
-  // ドレミファソラシドの周波数
-  const noteFrequencies: { [key: string]: number } = {
-    '1': 261.63, // ド (C4)
-    '2': 293.66, // レ (D4)
-    '3': 329.63, // ミ (E4)
-    '4': 349.23, // ファ (F4)
-    '5': 392.0, // ソ (G4)
-    '6': 440.0, // ラ (A4)
-    '7': 493.88, // シ (B4)
-    '8': 523.25, // ド (C5)
-  };
+  const scales = [
+    { name: 'メジャー', notes: [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25] },
+    { name: 'マイナー', notes: [261.63, 293.66, 311.13, 349.23, 392.00, 415.30, 466.16, 523.25] },
+    { name: 'ハーモニック・マイナー', notes: [261.63, 293.66, 311.13, 349.23, 392.00, 415.30, 493.88, 523.25] },
+    { name: 'メロディック・マイナー', notes: [261.63, 293.66, 311.13, 349.23, 392.00, 440.00, 493.88, 523.25] },
+    { name: 'ドリアン', notes: [261.63, 293.66, 311.13, 349.23, 392.00, 440.00, 466.16, 523.25] },
+    { name: 'フリジアン', notes: [261.63, 277.18, 311.13, 349.23, 392.00, 415.30, 466.16, 523.25] },
+    { name: 'リディアン', notes: [261.63, 293.66, 329.63, 370.00, 392.00, 440.00, 493.88, 523.25] },
+    { name: 'ミクソリディアン', notes: [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 466.16, 523.25] },
+    { name: 'ブルース', notes: [261.63, 293.66, 311.13, 329.63, 392.00, 466.16, 523.25] },
+    { name: 'ペンタトニック', notes: [261.63, 293.66, 329.63, 392.00, 440.00, 523.25] },
+  ];
+
+  const currentScale = scales[currentScaleIndex];
 
   useEffect(() => {
     const context = new window.AudioContext();
@@ -26,56 +30,66 @@ export default function Page() {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.code.startsWith('Numpad')) {
         const number = event.key;
-        setInput((prevInput) => prevInput + number);
 
-        // 該当する音を再生
-        if (noteFrequencies[number]) {
-          startNote(context, noteFrequencies[number]);
+        if (number === '+') {
+          setCurrentScaleIndex((prevIndex) => (prevIndex + 1) % scales.length);
+        } else if (number === '-') {
+          setCurrentScaleIndex((prevIndex) => (prevIndex - 1 + scales.length) % scales.length);
+        } else if (!isNaN(Number(number))) {
+          setActiveKeys((prevKeys) => {
+            const newKeys = new Set(prevKeys);
+            newKeys.add(number);
+
+            if (currentScale.notes[parseInt(number) - 1] && !oscillators[number]) {
+              startNote(context, number, currentScale.notes[parseInt(number) - 1]);
+            }
+
+            return newKeys;
+          });
         }
       }
     };
 
     const handleKeyUp = (event: KeyboardEvent) => {
-      if (event.code.startsWith('Numpad') && oscillator) {
-        stopNote();
+      if (event.code.startsWith('Numpad')) {
+        const number = event.key;
+        setActiveKeys((prevKeys) => {
+          const newKeys = new Set(prevKeys);
+          newKeys.delete(number);
+
+          stopNote(number);
+
+          return newKeys;
+        });
       }
     };
 
-    const startNote = (audioContext: AudioContext, frequency: number) => {
+    const startNote = (audioContext: AudioContext, key: string, frequency: number) => {
       const osc = audioContext.createOscillator();
       const gainNode = audioContext.createGain();
 
-      osc.type = 'sine'; // 波形のタイプを指定（ここでは正弦波）
-      osc.frequency.setValueAtTime(frequency, audioContext.currentTime); // 周波数を設定
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(frequency, audioContext.currentTime);
       osc.connect(gainNode);
       gainNode.connect(audioContext.destination);
 
+      gainNode.gain.setValueAtTime(1, audioContext.currentTime);
       osc.start();
-      setOscillator(osc);
+
+      setOscillators((prevOscillators) => ({
+        ...prevOscillators,
+        [key]: { osc, gain: gainNode },
+      }));
     };
 
-    const stopNote = () => {
-      if (oscillator) {
-        oscillator.stop();
-        setOscillator(null);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-      if (audioContext) audioContext.close();
-    };
-  }, [oscillator]);
-
-  return (
-    <div>
-      <h1>テンキーでドレミファソラシドを再生</h1>
-      <p>テンキーで数字を押して音を確認してください：</p>
-      <div id="display">{input}</div>
-    </div>
-  );
-}
+    const stopNote = (key: string) => {
+      const node = oscillators[key];
+      if (node) {
+        const { osc, gain } = node;
+        gain.gain.exponentialRampToValueAtTime(0.001, audioContext!.currentTime + 0.03);
+        osc.stop(audioContext!.currentTime + 0.03);
+        osc.disconnect();
+        setOscillators((prevOscillators) => ({
+          ...prevOscillators,
+          [key]: null,
+        }));
