@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 export default function Page() {
   const [activeKeys, setActiveKeys] = useState<Set<string>>(new Set());
-  const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
+  const [audioContext] = useState(() => new window.AudioContext());
   const [currentScaleIndex, setCurrentScaleIndex] = useState(0);
   const oscillatorsRef = useRef<{ [key: string]: { osc: OscillatorNode, gain: GainNode } | null }>({});
 
@@ -23,83 +23,74 @@ export default function Page() {
 
   const currentScale = scales[currentScaleIndex];
 
-  useEffect(() => {
-    const context = new window.AudioContext();
-    setAudioContext(context);
+  const startNote = (key: string, frequency: number) => {
+    if (oscillatorsRef.current[key]) return; // 既にオシレーターが存在する場合は何もしない
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const number = event.key;
-      if (event.code.startsWith('Numpad')) {
-        if (number === '+') {
-          setCurrentScaleIndex((prevIndex) => (prevIndex + 1) % scales.length);
-        } else if (number === '-') {
-          setCurrentScaleIndex((prevIndex) => (prevIndex - 1 + scales.length) % scales.length);
-        } else if (!isNaN(Number(number)) && !activeKeys.has(number)) {
-          setActiveKeys((prevKeys) => {
-            const newKeys = new Set(prevKeys);
-            newKeys.add(number);
-            startNote(context, number, currentScale.notes[parseInt(number) - 1]);
-            return newKeys;
-          });
-        }
-      }
-    };
+    const osc = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
 
-    const handleKeyUp = (event: KeyboardEvent) => {
-      const number = event.key;
-      if (event.code.startsWith('Numpad')) {
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(frequency, audioContext.currentTime);
+    osc.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+
+    gainNode.gain.setValueAtTime(1, audioContext.currentTime);
+    osc.start();
+
+    oscillatorsRef.current[key] = { osc, gain: gainNode };
+  };
+
+  const stopNote = (key: string) => {
+    const node = oscillatorsRef.current[key];
+    if (node) {
+      const { osc, gain } = node;
+      gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.03);
+      osc.stop(audioContext.currentTime + 0.03);
+      osc.disconnect();
+
+      delete oscillatorsRef.current[key];
+    }
+  };
+
+  const handleKeyDown = (event: KeyboardEvent) => {
+    const number = event.key;
+    if (event.code.startsWith('Numpad')) {
+      if (number === '+') {
+        setCurrentScaleIndex((prevIndex) => (prevIndex + 1) % scales.length);
+      } else if (number === '-') {
+        setCurrentScaleIndex((prevIndex) => (prevIndex - 1 + scales.length) % scales.length);
+      } else if (!isNaN(Number(number)) && !activeKeys.has(number)) {
         setActiveKeys((prevKeys) => {
           const newKeys = new Set(prevKeys);
-          newKeys.delete(number);
-          stopNote(number);
+          newKeys.add(number);
+          startNote(number, currentScale.notes[parseInt(number) - 1]);
           return newKeys;
         });
       }
-    };
+    }
+  };
 
-    const startNote = (audioContext: AudioContext, key: string, frequency: number) => {
-      const osc = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
+  const handleKeyUp = (event: KeyboardEvent) => {
+    const number = event.key;
+    if (event.code.startsWith('Numpad')) {
+      setActiveKeys((prevKeys) => {
+        const newKeys = new Set(prevKeys);
+        newKeys.delete(number);
+        stopNote(number);
+        return newKeys;
+      });
+    }
+  };
 
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(frequency, audioContext.currentTime);
-      osc.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-
-      gainNode.gain.setValueAtTime(1, audioContext.currentTime); // 音量を最大に設定
-      osc.start();
-
-      oscillatorsRef.current = {
-        ...oscillatorsRef.current,
-        [key]: { osc, gain: gainNode },
-      };
-    };
-
-    const stopNote = (key: string) => {
-      const node = oscillatorsRef.current[key];
-      if (node) {
-        const { osc, gain } = node;
-        gain.gain.exponentialRampToValueAtTime(0.001, audioContext!.currentTime + 0.03); // 音量をフェードアウト
-        osc.stop(audioContext!.currentTime + 0.03); // オシレーターを停止
-        osc.disconnect();
-
-        // オシレーターを削除
-        oscillatorsRef.current = {
-          ...oscillatorsRef.current,
-          [key]: null,
-        };
-      }
-    };
-
+  useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
-      if (audioContext) audioContext.close();
     };
-  }, [currentScale, activeKeys]);
+  }, [currentScale]);
 
   return (
     <div>
