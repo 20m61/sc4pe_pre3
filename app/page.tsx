@@ -127,7 +127,7 @@ export default function Page() {
         newKeys.delete(number);
         stopNote(number);
         if (newKeys.size === 0) {
-          stopVisualization(); // 全てのキーが離されたらビジュアライゼーションを停止
+          stopVisualization();
         }
         return newKeys;
       });
@@ -138,10 +138,20 @@ export default function Page() {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
 
+    // 初期化時にキャンバスに描画テスト
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = 'white';
+        ctx.fillRect(10, 10, 50, 50); // テスト用の四角形を描画
+      }
+    }
+
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
-      stopVisualization(); // コンポーネントがアンマウントされた時にビジュアライゼーションを停止
+      stopVisualization();
     };
   }, [currentScale]);
 
