@@ -26,11 +26,10 @@ export default function Page() {
   const currentScale = scales[currentScaleIndex];
 
   useEffect(() => {
-    // クライアントサイドでのみ AudioContext を生成する
     const audioCtx = new window.AudioContext();
     setAudioContext(audioCtx);
 
-    const resizeCanvas = () => {
+    const handleResize = () => {
       const canvas = canvasRef.current;
       if (canvas) {
         canvas.width = window.innerWidth;
@@ -38,46 +37,68 @@ export default function Page() {
       }
     };
 
-    window.addEventListener('resize', resizeCanvas);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!audioCtx) return;
 
-    resizeCanvas();
+      const number = event.key;
+      if (event.code.startsWith('Numpad')) {
+        if (number === '+') {
+          setCurrentScaleIndex((prevIndex) => (prevIndex + 1) % scales.length);
+        } else if (number === '-') {
+          setCurrentScaleIndex((prevIndex) => (prevIndex - 1 + scales.length) % scales.length);
+        } else if (!isNaN(Number(number)) && !activeKeys.has(number)) {
+          setActiveKeys((prevKeys) => {
+            const newKeys = new Set(prevKeys);
+            newKeys.add(number);
+            startNote(audioCtx, number, currentScale.notes[parseInt(number) - 1]);
+            return newKeys;
+          });
+        }
+      }
+    };
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      const number = event.key;
+      if (event.code.startsWith('Numpad')) {
+        setActiveKeys((prevKeys) => {
+          const newKeys = new Set(prevKeys);
+          newKeys.delete(number);
+          stopNote(number);
+          if (newKeys.size === 0) {
+            stopVisualization();
+          }
+          return newKeys;
+        });
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    handleResize();
 
     return () => {
-      window.removeEventListener('resize', resizeCanvas);
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
       stopVisualization();
+      audioCtx.close(); // AudioContextの終了
     };
-  }, []);
+  }, [currentScale]);
 
-  useEffect(() => {
-    // 初期化時にキャンバスに描画テスト
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = 'black';
-        ctx.fillRect(0, 0, canvas.width, canvas.height); // キャンバス全体を黒で塗りつぶし
-
-        // テスト用の白い円を描画
-        ctx.beginPath();
-        ctx.arc(canvas.width / 2, canvas.height / 2, 50, 0, 2 * Math.PI);
-        ctx.fillStyle = 'white';
-        ctx.fill();
-      }
-    }
-  }, []);
-
-  const startNote = (key: string, frequency: number) => {
+  const startNote = (audioCtx: AudioContext, key: string, frequency: number) => {
     if (!audioContext || oscillatorsRef.current[key]) return;
 
-    const osc = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
+    const osc = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
 
     osc.type = 'sine';
     osc.frequency.setValueAtTime(frequency, audioContext.currentTime);
     osc.connect(gainNode);
-    gainNode.connect(audioContext.destination);
+    gainNode.connect(audioCtx.destination);
 
-    gainNode.gain.setValueAtTime(1, audioContext.currentTime);
+    gainNode.gain.setValueAtTime(1, audioCtx.currentTime);
     osc.start();
 
     oscillatorsRef.current[key] = { osc, gain: gainNode };
@@ -152,39 +173,6 @@ export default function Page() {
           ctx.clearRect(0, 0, canvas.width, canvas.height);
         }
       }
-    }
-  };
-
-  const handleKeyDown = (event: KeyboardEvent) => {
-    const number = event.key;
-    if (event.code.startsWith('Numpad')) {
-      if (number === '+') {
-        setCurrentScaleIndex((prevIndex) => (prevIndex + 1) % scales.length);
-      } else if (number === '-') {
-        setCurrentScaleIndex((prevIndex) => (prevIndex - 1 + scales.length) % scales.length);
-      } else if (!isNaN(Number(number)) && !activeKeys.has(number)) {
-        setActiveKeys((prevKeys) => {
-          const newKeys = new Set(prevKeys);
-          newKeys.add(number);
-          startNote(number, currentScale.notes[parseInt(number) - 1]);
-          return newKeys;
-        });
-      }
-    }
-  };
-
-  const handleKeyUp = (event: KeyboardEvent) => {
-    const number = event.key;
-    if (event.code.startsWith('Numpad')) {
-      setActiveKeys((prevKeys) => {
-        const newKeys = new Set(prevKeys);
-        newKeys.delete(number);
-        stopNote(number);
-        if (newKeys.size === 0) {
-          stopVisualization();
-        }
-        return newKeys;
-      });
     }
   };
 
