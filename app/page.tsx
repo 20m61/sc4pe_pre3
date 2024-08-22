@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 export default function Page() {
   const [activeKeys, setActiveKeys] = useState<Set<string>>(new Set());
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
-  const [oscillators, setOscillators] = useState<{ [key: string]: OscillatorNode | null }>({});
+  const [oscillators, setOscillators] = useState<{ [key: string]: { osc: OscillatorNode, gain: GainNode } | null }>({});
   const [currentScaleIndex, setCurrentScaleIndex] = useState(0);
 
   const scales = [
@@ -34,13 +34,11 @@ export default function Page() {
           setCurrentScaleIndex((prevIndex) => (prevIndex + 1) % scales.length);
         } else if (number === '-') {
           setCurrentScaleIndex((prevIndex) => (prevIndex - 1 + scales.length) % scales.length);
-        } else if (!isNaN(Number(number))) {
+        } else if (!isNaN(Number(number)) && !activeKeys.has(number)) {
           setActiveKeys((prevKeys) => {
             const newKeys = new Set(prevKeys);
-            if (!newKeys.has(number)) {
-              newKeys.add(number);
-              startNote(context, number, currentScale.notes[parseInt(number) - 1]);
-            }
+            newKeys.add(number);
+            startNote(context, number, currentScale.notes[parseInt(number) - 1]);
             return newKeys;
           });
         }
@@ -68,26 +66,26 @@ export default function Page() {
       osc.connect(gainNode);
       gainNode.connect(audioContext.destination);
 
-      gainNode.gain.setValueAtTime(1, audioContext.currentTime);
+      gainNode.gain.setValueAtTime(1, audioContext.currentTime); // 音量を最大に設定
       osc.start();
 
       setOscillators((prevOscillators) => ({
         ...prevOscillators,
-        [key]: osc,
+        [key]: { osc, gain: gainNode },
       }));
     };
 
     const stopNote = (key: string) => {
-      if (oscillators[key]) {
-        const osc = oscillators[key];
-        if (osc) {
-          osc.stop();
-          osc.disconnect();
-          setOscillators((prevOscillators) => ({
-            ...prevOscillators,
-            [key]: null,
-          }));
-        }
+      const node = oscillators[key];
+      if (node) {
+        const { osc, gain } = node;
+        gain.gain.exponentialRampToValueAtTime(0.001, audioContext!.currentTime + 0.03); // 音量をフェードアウト
+        osc.stop(audioContext!.currentTime + 0.03); // オシレーターを停止
+        osc.disconnect();
+        setOscillators((prevOscillators) => ({
+          ...prevOscillators,
+          [key]: null,
+        }));
       }
     };
 
@@ -99,7 +97,7 @@ export default function Page() {
       window.removeEventListener('keyup', handleKeyUp);
       if (audioContext) audioContext.close();
     };
-  }, [oscillators, currentScale]);
+  }, [oscillators, currentScale, activeKeys]);
 
   return (
     <div>
