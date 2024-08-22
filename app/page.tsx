@@ -92,4 +92,28 @@ export default function Page() {
         setOscillators((prevOscillators) => ({
           ...prevOscillators,
           [key]: null,
-        }));
+                  }));
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      if (audioContext) audioContext.close();
+    };
+  }, [oscillators, currentScale]);
+
+  return (
+    <div>
+      <h1>テンキーで和音を再生</h1>
+      <p>現在のスケール: {currentScale.name}</p>
+      <p>現在押されているキー：</p>
+      <div id="display">
+        {Array.from(activeKeys).join(', ')}
+      </div>
+    </div>
+  );
+}
