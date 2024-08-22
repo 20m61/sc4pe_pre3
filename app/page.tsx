@@ -1,12 +1,14 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export default function Page() {
   const [activeKeys, setActiveKeys] = useState<Set<string>>(new Set());
   const [audioContext] = useState(() => new window.AudioContext());
   const [currentScaleIndex, setCurrentScaleIndex] = useState(0);
   const oscillatorsRef = useRef<{ [key: string]: { osc: OscillatorNode, gain: GainNode } | null }>({});
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const requestIdRef = useRef<number | null>(null);
 
   const scales = [
     { name: 'メジャー', notes: [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25] },
@@ -24,7 +26,7 @@ export default function Page() {
   const currentScale = scales[currentScaleIndex];
 
   const startNote = (key: string, frequency: number) => {
-    if (oscillatorsRef.current[key]) return; // 既にオシレーターが存在する場合は何もしない
+    if (oscillatorsRef.current[key]) return;
 
     const osc = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
@@ -38,6 +40,8 @@ export default function Page() {
     osc.start();
 
     oscillatorsRef.current[key] = { osc, gain: gainNode };
+
+    startVisualization(frequency);
   };
 
   const stopNote = (key: string) => {
@@ -49,6 +53,51 @@ export default function Page() {
       osc.disconnect();
 
       delete oscillatorsRef.current[key];
+    }
+  };
+
+  const startVisualization = (frequency: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const draw = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // スパークするエフェクト
+      const numSparks = 50;
+      for (let i = 0; i < numSparks; i++) {
+        const angle = Math.random() * 2 * Math.PI;
+        const distance = Math.random() * (frequency / 4);
+        const x = canvas.width / 2 + distance * Math.cos(angle);
+        const y = canvas.height / 2 + distance * Math.sin(angle);
+
+        ctx.beginPath();
+        ctx.arc(x, y, 2, 0, 2 * Math.PI);
+        ctx.fillStyle = `hsl(${Math.random() * 360}, 100%, 50%)`;
+        ctx.fill();
+      }
+
+      requestIdRef.current = requestAnimationFrame(draw);
+    };
+
+    draw();
+  };
+
+  const stopVisualization = () => {
+    if (requestIdRef.current) {
+      cancelAnimationFrame(requestIdRef.current);
+      requestIdRef.current = null;
+
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+      }
     }
   };
 
@@ -77,6 +126,9 @@ export default function Page() {
         const newKeys = new Set(prevKeys);
         newKeys.delete(number);
         stopNote(number);
+        if (newKeys.size === 0) {
+          stopVisualization(); // 全てのキーが離されたらビジュアライゼーションを停止
+        }
         return newKeys;
       });
     }
@@ -89,6 +141,7 @@ export default function Page() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      stopVisualization(); // コンポーネントがアンマウントされた時にビジュアライゼーションを停止
     };
   }, [currentScale]);
 
@@ -100,6 +153,7 @@ export default function Page() {
       <div id="display">
         {Array.from(activeKeys).join(', ')}
       </div>
+      <canvas ref={canvasRef} width={800} height={600} style={{ background: 'black', marginTop: '20px' }} />
     </div>
   );
 }
