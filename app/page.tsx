@@ -39,17 +39,31 @@ export default function Page() {
     };
 
     window.addEventListener('resize', resizeCanvas);
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
 
     resizeCanvas();
 
     return () => {
       window.removeEventListener('resize', resizeCanvas);
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
       stopVisualization();
     };
+  }, []);
+
+  useEffect(() => {
+    // 初期化時にキャンバスに描画テスト
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = 'black';
+        ctx.fillRect(0, 0, canvas.width, canvas.height); // キャンバス全体を黒で塗りつぶし
+
+        // テスト用の白い円を描画
+        ctx.beginPath();
+        ctx.arc(canvas.width / 2, canvas.height / 2, 50, 0, 2 * Math.PI);
+        ctx.fillStyle = 'white';
+        ctx.fill();
+      }
+    }
   }, []);
 
   const startNote = (key: string, frequency: number) => {
