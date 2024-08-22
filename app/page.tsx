@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 
 export default function Page() {
   const [activeKeys, setActiveKeys] = useState<Set<string>>(new Set());
-  const [audioContext] = useState(() => new window.AudioContext());
+  const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
   const [currentScaleIndex, setCurrentScaleIndex] = useState(0);
   const oscillatorsRef = useRef<{ [key: string]: { osc: OscillatorNode, gain: GainNode } | null }>({});
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -25,8 +25,35 @@ export default function Page() {
 
   const currentScale = scales[currentScaleIndex];
 
+  useEffect(() => {
+    // クライアントサイドでのみ AudioContext を生成する
+    const audioCtx = new window.AudioContext();
+    setAudioContext(audioCtx);
+
+    const resizeCanvas = () => {
+      const canvas = canvasRef.current;
+      if (canvas) {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+      }
+    };
+
+    window.addEventListener('resize', resizeCanvas);
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    resizeCanvas();
+
+    return () => {
+      window.removeEventListener('resize', resizeCanvas);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      stopVisualization();
+    };
+  }, []);
+
   const startNote = (key: string, frequency: number) => {
-    if (oscillatorsRef.current[key]) return;
+    if (!audioContext || oscillatorsRef.current[key]) return;
 
     const osc = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
@@ -48,8 +75,8 @@ export default function Page() {
     const node = oscillatorsRef.current[key];
     if (node) {
       const { osc, gain } = node;
-      gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.03);
-      osc.stop(audioContext.currentTime + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioContext!.currentTime + 0.03);
+      osc.stop(audioContext!.currentTime + 0.03);
       osc.disconnect();
 
       delete oscillatorsRef.current[key];
@@ -146,29 +173,6 @@ export default function Page() {
       });
     }
   };
-
-  useEffect(() => {
-    const resizeCanvas = () => {
-      const canvas = canvasRef.current;
-      if (canvas) {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-      }
-    };
-
-    window.addEventListener('resize', resizeCanvas);
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-
-    resizeCanvas();
-
-    return () => {
-      window.removeEventListener('resize', resizeCanvas);
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-      stopVisualization();
-    };
-  }, [currentScale]);
 
   return (
     <div>
