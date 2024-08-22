@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export default function Page() {
   const [activeKeys, setActiveKeys] = useState<Set<string>>(new Set());
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
-  const [oscillators, setOscillators] = useState<{ [key: string]: { osc: OscillatorNode, gain: GainNode } | null }>({});
   const [currentScaleIndex, setCurrentScaleIndex] = useState(0);
+  const oscillatorsRef = useRef<{ [key: string]: { osc: OscillatorNode, gain: GainNode } | null }>({});
 
   const scales = [
     { name: 'メジャー', notes: [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25] },
@@ -69,23 +69,25 @@ export default function Page() {
       gainNode.gain.setValueAtTime(1, audioContext.currentTime); // 音量を最大に設定
       osc.start();
 
-      setOscillators((prevOscillators) => ({
-        ...prevOscillators,
+      oscillatorsRef.current = {
+        ...oscillatorsRef.current,
         [key]: { osc, gain: gainNode },
-      }));
+      };
     };
 
     const stopNote = (key: string) => {
-      const node = oscillators[key];
+      const node = oscillatorsRef.current[key];
       if (node) {
         const { osc, gain } = node;
         gain.gain.exponentialRampToValueAtTime(0.001, audioContext!.currentTime + 0.03); // 音量をフェードアウト
         osc.stop(audioContext!.currentTime + 0.03); // オシレーターを停止
         osc.disconnect();
-        setOscillators((prevOscillators) => ({
-          ...prevOscillators,
+
+        // オシレーターを削除
+        oscillatorsRef.current = {
+          ...oscillatorsRef.current,
           [key]: null,
-        }));
+        };
       }
     };
 
@@ -97,7 +99,7 @@ export default function Page() {
       window.removeEventListener('keyup', handleKeyUp);
       if (audioContext) audioContext.close();
     };
-  }, [oscillators, currentScale, activeKeys]);
+  }, [currentScale, activeKeys]);
 
   return (
     <div>
